@@ -1,0 +1,11 @@
+#!/bin/bash
+
+nova boot --user-data ./cloud-config-front.yaml \
+--key-name duffqiu \
+--flavor m1.medium \
+--security-groups default \
+--nic net-id=9b679a24-0084-4999-a72a-61a00483985e \
+--block-device id=af00e8f5-0678-459f-a0d9-2b1c137441a8,source=volume,dest=volume,device=vdb,type=disk,shutdown=preserve \
+--image ab19e5c3-5056-404b-8a95-d8a114a9853e \
+coreosfe-$(uuidgen)
+

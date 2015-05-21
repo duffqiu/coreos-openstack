@@ -21,7 +21,7 @@ coreos:
         - name: docker_opts.conf
           content: |
             [Service]
-            Environment=DOCKER_OPTS='--registry-mirror=http://192.168.3.149:5000 --insecure-registry="192.168.3.0/24"'
+            Environment="DOCKER_OPTS=--registry-mirror=http://192.168.3.149:5000 --insecure-registry=192.168.3.149"
     - name: mirror.mount
       command: start
       content: |
@@ -64,8 +64,8 @@ coreos:
         ExecStartPre=-/usr/bin/docker rm etcd 
         ExecStart=/usr/bin/docker run --name etcd -v /mirror/selfetcd:/etcd/data -p 8001:4001 -e ETCD_DATA_DIR=/etcd/data duffqiu/etcd
         ExecStop=-/usr/bin/docker stop etcd
-        estart=always
-        RestartSec=10s
+        Restart=always
+        RestartSec=10
         LimitNOFILE=40000  
     - name: selfetcd-init.service
       command: start
@@ -75,9 +75,12 @@ coreos:
         After=selfetcd.service
         Requires=selfetcd.service
         [Service]
-        ExecStart=-/usr/bin/etcdctl --peers=127.0.0.1:8001 set /discovery/6c007a14875d53d9bf0ef5a6fc0257c817f0fb83/_config/size \"value=9\"
+        Restart=always
+        RestartSec=30
+        ExecStart=/usr/bin/etcdctl --peers=127.0.0.1:8001 set /discovery/6c007a14875d53d9bf0ef5a6fc0257c817f0fb83/_config/size \"value=9\"
     - name: keepalived.service
       command: start
+      content: |
         [Unit]
         Description=keepalived service unit
         After=docker.service
@@ -116,5 +119,5 @@ write_files:
     permissions: 0644
     content: |
       [Service]
-      Environment="HTTP_PROXY=http://10.175.250.81:8080" "HTTPS_PROXY=http://10.175.250.81:8080" "NO_PROXY=127.0.0.1,localhost,192.168.3.107,/var/run/docker.sock"
+      Environment="HTTP_PROXY=http://10.175.250.81:8080" "HTTPS_PROXY=http://10.175.250.81:8080" "NO_PROXY=127.0.0.1,localhost,192.168.3.149,/var/run/docker.sock"
 

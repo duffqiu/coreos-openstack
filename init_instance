@@ -2,7 +2,7 @@
 
 nova boot \
 --user-data ./cloud-config.yaml \
---image e0ccadc5-0cce-4c78-8e3b-92d8b8679e28 \
+--image ab19e5c3-5056-404b-8a95-d8a114a9853e \
 --key-name duffqiu \
 --flavor m1.large \
 --security-groups default coreos \
