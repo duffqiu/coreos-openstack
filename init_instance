@@ -4,7 +4,7 @@ nova boot \
 --user-data ./cloud-config.yaml \
 --image ab19e5c3-5056-404b-8a95-d8a114a9853e \
 --key-name duffqiu \
---flavor m1.large \
---security-groups default coreos \
+--flavor m1.medium \
+--security-groups default \
 --nic net-id=9b679a24-0084-4999-a72a-61a00483985e \
-$1-$(uuidgen) 
+coreosbe-$(uuidgen) 
