@@ -1,10 +1,12 @@
 #cloud-config
 
 coreos:
+  fleet:
+    metadata: role=back
   etcd:
     # generate a new token for each unique cluster from https://discovery.etcd.io/new?size=3
     # specify the intial size of your cluster with ?size=X
-    discovery: http://192.168.3.107:8001/v2/keys/discovery/6c007a14875d53d9bf0ef5a6fc0257c817f0fb83
+    discovery: http://192.168.3.149:8001/v2/keys/discovery/6c007a14875d53d9bf0ef5a6fc0257c817f0fb83
     # multi-region and multi-cloud deployments need to use $public_ipv4
     addr: $private_ipv4:4001
     peer-addr: $private_ipv4:7001
@@ -15,22 +17,12 @@ coreos:
       command: start
     - name: docker.service
       command: restart
-      content: |
-        [Unit]
-        Description=Docker Application Container Engine
-        Documentation=http://docs.docker.com
-        After=docker.socket early-docker.target network.target
-        Requires=docker.socket early-docker.target
-        [Service]
-        Environment=TMPDIR=/var/tmp
-        EnvironmentFile=-/etc/docker/docker_opts.env
-        MountFlags=slave
-        LimitNOFILE=1048576
-        LimitNPROC=1048576
-        ExecStart=/usr/lib/coreos/dockerd --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
-        [Install]
-        WantedBy=multi-user.target
-      
+      drop-ins:
+        - name: docker_opts.conf
+          content: |
+            [Service]
+            Environment="DOCKER_OPTS=--registry-mirror=http://192.168.3.149:5000 --insecure-registry=192.168.3.149"
+ 
 ssh_authorized_keys:
   # include one or more SSH public keys
   - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAzlyD7ANhZtlqN02IlcSsvqElCGCnxjzpgUJNFiEoICMqKIbQR0UtRHHFq4zqxb35ejDCKFowTeuS0WCqYGbu2ZX19opH3TWuw315mepq+Xyt1x0c/N4qKJyNqrjlaqW0x9SZacyUD4VPO8LiHwqcG0KVB9aFg6xaKLbXK/eyHBRYUoKfNOGecFOGdGr0qplVC4TTetViyUI3vwlD8GOB1F17I40eTHYL/95bbrGzdC5/HBFQfYlOODZHTdbcUzwYTkG9QHPm63b61yiKCHOpkTp3BIvqqOOIpfc4ECHqUd7kw7WNdbWayi00IV+WBSyRWd/CxBda3ODIxVICw3So5Q== root@controller1
@@ -52,11 +44,6 @@ write_files:
     permissions: 0644
     content: |
       [Service]
-      Environment="HTTP_PROXY=http://10.175.250.81:8080" "HTTPS_PROXY=http://10.175.250.81:8080" "NO_PROXY=127.0.0.1,localhost,192.168.3.107,/var/run/docker.sock"
-  - path: /etc/docker/docker_opts.env
-    permissions: 0644
-    owner: root
-    content: |
-      DOCKER_OPTS="--registry-mirror=http://192.168.3.107:5000 --insecure-registry=192.168.3.107:5000"
+      Environment="HTTP_PROXY=http://10.175.250.81:8080" "HTTPS_PROXY=http://10.175.250.81:8080" "NO_PROXY=127.0.0.1,localhost,192.168.3.149,/var/run/docker.sock"
 
 
