@@ -38,6 +38,7 @@ coreos:
         [Unit]
         Description=docker private registry service
         After=docker.service
+        Wants=registry.service
         [Service]
         ExecStartPre=-/usr/bin/docker kill registry
         ExecStartPre=-/usr/bin/docker rm registry
@@ -47,6 +48,7 @@ coreos:
                                   -e "STANDALONE=true" \
                                   -e "MIRROR_SOURCE=https://registry-1.docker.io" \
                                   -e "MIRROR_SOURCE_INDEX=https://index.docker.io" \
+                                  -e SEARCH_BACKEND=sqlalchemy \
                                   -e "SETTINGS_FLAVOR=local" \
                                   --dns 146.11.115.200 \
                                   registry
@@ -59,6 +61,7 @@ coreos:
         [Unit]
         Description=self etcd service
         After=docker.service
+        Wants=registry.service selfetcd-init.service
         [Service]
         ExecStartPre=-/usr/bin/docker kill etcd 
         ExecStartPre=-/usr/bin/docker rm etcd 
@@ -84,6 +87,7 @@ coreos:
         [Unit]
         Description=keepalived service unit
         After=docker.service
+        Requires=selfetcd.service registry.service
         [Service]
         Restart=always
         RestartSec=5
