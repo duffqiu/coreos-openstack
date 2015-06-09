@@ -21,7 +21,7 @@ coreos:
         - name: docker_opts.conf
           content: |
             [Service]
-            Environment="DOCKER_OPTS=--registry-mirror=http://192.168.3.149:5000 --insecure-registry=192.168.3.149"
+            Environment="DOCKER_OPTS=--registry-mirror=http://192.168.3.149:5000 --insecure-registry=192.168.3.149:5000"
  
 ssh_authorized_keys:
   # include one or more SSH public keys
