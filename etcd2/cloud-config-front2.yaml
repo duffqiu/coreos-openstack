@@ -1,0 +1,159 @@
+#cloud-config
+
+coreos:
+  fleet:
+    metadata: role=front
+  etcd2:
+    discovery: http://192.168.3.149:8001/v2/keys/discovery/0a289b9e843545b1a902-b4a798fd4ec0
+    # multi-region and multi-cloud deployments need to use $public_ipv4
+    advertise-client-urls: http://$private_ipv4:2379,http://$private_ipv4:4001
+    initial-advertise-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+    # listen on both the official ports and the legacy ports
+    # legacy ports can be omitted if your application doesn't depend on them
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+    data-dir: /mirror/etcd2
+  units:
+    - name: etcd2.service
+      command: restart
+    - name: fleet.service
+      command: start
+    - name: docker.service
+      command: restart
+      drop-ins:
+        - name: docker_opts.conf
+          content: |
+            [Service]
+            Environment="DOCKER_OPTS=--registry-mirror=http://192.168.3.149:5000 --insecure-registry=192.168.3.149:5000"
+    - name: mirror.mount
+      command: start
+      content: |
+        [Unit]
+        Description=mount the block volume
+        Before=docker.service
+        [Mount]
+        What=/dev/vdb
+        Where=/mirror
+        Type=ext4
+    - name: registry.service
+      command: start
+      content: |
+        [Unit]
+        Description=docker private registry service
+        After=docker.service
+        [Service]
+        ExecStartPre=-/usr/bin/docker kill registry
+        ExecStartPre=-/usr/bin/docker rm registry
+        ExecStart=/usr/bin/docker run --name registry -v /mirror/registry:/tmp/ -p 5000:5000 \
+                                  -e "http_proxy=http://10.175.250.81:8080" \
+                                  -e "https_proxy=http://10.175.250.81:8080" \
+                                  -e "STANDALONE=true" \
+                                  -e "MIRROR_SOURCE=https://registry-1.docker.io" \
+                                  -e "MIRROR_SOURCE_INDEX=https://index.docker.io" \
+                                  -e "SETTINGS_FLAVOR=local" \
+                                  --dns 146.11.115.200 \
+                                  registry
+        ExecStop=-/usr/bin/docker stop registry
+        Restart=always
+        RestartSec=10s   
+    - name: selfetcd.service
+      command: start
+      content: |
+        [Unit]
+        Description=self etcd service
+        After=docker.service
+        [Service]
+        ExecStartPre=-/usr/bin/docker kill selfetcd 
+        ExecStartPre=-/usr/bin/docker rm selfetcd 
+        ExecStart=/usr/bin/docker run --name selfetcd -v /mirror/selfetcd:/etcd/data -p 8001:4001 \
+                                  -e ETCD_DATA_DIR=/etcd/data \
+                                  -e ADV_URLS=http://192.168.3.149:8001 \
+                                  duffqiu/etcd
+        ExecStop=-/usr/bin/docker stop selfetcd
+        Restart=always
+        RestartSec=10
+        LimitNOFILE=40000  
+    - name: selfetcd-init.service
+      command: start
+      content: |
+        [Unit]
+        Description=self etcd init service
+        After=selfetcd.service
+        Requires=selfetcd.service
+        [Service]
+        Restart=always
+        RestartSec=30
+        ExecStart=/usr/bin/etcdctl --peers=192.168.3.149:8001 set /discovery/0a289b9e843545b1a902-b4a798fd4ec0/_config/size 3
+    - name: etcd2-proxy.service
+      command: start
+      content: |
+        [Unit]
+        Description=etcd2 proxy
+        Conflicts=etcd.service
+        [Service]
+        User=etcd
+        Environment=ETCD_DATA_DIR=/mirror/etcd2-proxy
+        Environment=ETCD_NAME=%m-proxy
+        ExecStart=/usr/bin/etcd2 --proxy on --listen-client-urls http://0.0.0.0:4008  --discovery http://192.168.3.149:8001/v2/keys/discovery/0a289b9e843545b1a902-b4a798fd4ec0
+        Restart=always
+        RestartSec=10s
+        LimitNOFILE=40000
+    - name: keepalived.service
+      command: start
+      content: |
+        [Unit]
+        Description=keepalived service unit
+        After=docker.service
+        [Service]
+        Restart=always
+        RestartSec=5
+        EnvironmentFile=/etc/environment
+        ExecStartPre=-/sbin/modprobe -a ip_vs
+        ExecStartPre=-/usr/bin/docker kill keepalived
+        ExecStartPre=-/usr/bin/docker rm  keepalived
+        ExecStartPre=/usr/bin/docker pull duffqiu/keepalived:latest
+        ExecStart=/usr/bin/docker run  \
+                                      --name keepalived \
+                                      --net host \
+                                      --privileged \
+                                      -e "ROLE=BACKUP" \
+                                      duffqiu/keepalived:latest -vip=192.168.3.149
+        ExecStop=-/usr/bin/docker stop keepalived                
+    - name: etcd2-init.service
+      command: start
+      content: |
+        [Unit]
+        Description=etcd2 init service
+        Before=etcd2.service
+        After=mirror.mount
+        [Service]
+        Type=oneshot
+        ExecStartPre=-/bin/mkdir -p /mirror/etcd2
+        ExecStartPre=-/bin/chown etcd.etcd /mirror/etcd2
+        ExecStartPre=-/bin/mkdir -p /mirror/etcd2-proxy
+        ExecStartPre=-/bin/chown etcd.etcd /mirror/etcd2-proxy
+        ExecStart=/usr/bin/echo "create path for etcd2: /mirror/etcd2 and create path for etcd2-proxy: /mirror/etcd2-proxy"
+
+ssh_authorized_keys:
+  # include one or more SSH public keys
+  - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAzlyD7ANhZtlqN02IlcSsvqElCGCnxjzpgUJNFiEoICMqKIbQR0UtRHHFq4zqxb35ejDCKFowTeuS0WCqYGbu2ZX19opH3TWuw315mepq+Xyt1x0c/N4qKJyNqrjlaqW0x9SZacyUD4VPO8LiHwqcG0KVB9aFg6xaKLbXK/eyHBRYUoKfNOGecFOGdGr0qplVC4TTetViyUI3vwlD8GOB1F17I40eTHYL/95bbrGzdC5/HBFQfYlOODZHTdbcUzwYTkG9QHPm63b61yiKCHOpkTp3BIvqqOOIpfc4ECHqUd7kw7WNdbWayi00IV+WBSyRWd/CxBda3ODIxVICw3So5Q== root@controller1
+
+write_files:
+  - path: /etc/resolv.conf
+    permissions: 0644
+    owner: root
+    content: |
+      nameserver 146.11.115.200
+      nameserver 146.11.5.10
+      nameserver 153.88.112.200
+  - path: /etc/systemd/system/update-engine.service.d/proxy.conf
+    content: |
+      [Service]
+      Environment=ALL_PROXY=http://10.175.250.81:8080
+  - path: /etc/systemd/system/docker.service.d/http-proxy.conf
+    owner: core:core
+    permissions: 0644
+    content: |
+      [Service]
+      Environment="HTTP_PROXY=http://10.175.250.81:8080" "HTTPS_PROXY=http://10.175.250.81:8080" "NO_PROXY=127.0.0.1,localhost,192.168.3.149,/var/run/docker.sock"
+

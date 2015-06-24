@@ -1,0 +1,11 @@
+#~/bin/bash
+
+nova boot \
+--user-data ./cloud-config.yaml \
+--image 73b99bd1-aecc-473e-a403-d1b2e7df6203 \
+--key-name duffqiu \
+--flavor m1.large \
+--security-groups default \
+--nic net-id=9b679a24-0084-4999-a72a-61a00483985e \
+--block-device id=2ac6cda9-5532-4b86-903c-81c05c150784,source=volume,dest=volume,device=vdb,type=disk,shutdown=preserve \
+coreosbe-$(uuidgen) 
